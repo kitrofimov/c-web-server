@@ -1,3 +1,9 @@
 {
-    "C_Cpp.errorSquiggles": "disabled"
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.associations": {
+        "stdio.h": "c",
+        "types.h": "c",
+        "server_utils.h": "c",
+        "console_utils.h": "c"
+    }
 }
