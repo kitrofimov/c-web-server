@@ -5,7 +5,10 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <errno.h>
+
 #include "server_utils.h"
+#include "../lib/logger.h"
 
 // Checks the port validity (if it is in the range [1025, 65535]).
 // Returns 1 if it is valid, 0 if it is not
@@ -39,10 +42,9 @@ int create_socket(char *port, int backlog)
     hints.ai_flags = AI_PASSIVE;  // fill in my IP for me
 
     // setup the necessary structs with my IP
-    int status = getaddrinfo(NULL, port, &hints, &servinfo);
-	if (status != 0)
+    int getaddrinfo_status = getaddrinfo(NULL, port, &hints, &servinfo);
+	if (getaddrinfo_status != 0)
     {
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
         return -1;
     }
 
@@ -53,7 +55,6 @@ int create_socket(char *port, int backlog)
         socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (socket_fd == -1)  // if failed to create a socket, travel to the next node in LL
         {
-			perror("socket");
             continue;
         }
 
@@ -61,7 +62,6 @@ int create_socket(char *port, int backlog)
 		// (https://beej.us/guide/bgnet/html/split/system-calls-or-bust.html#bind)
 		if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
 		{
-			perror("setsockopt");
 			return -2;
         }
 
@@ -69,7 +69,6 @@ int create_socket(char *port, int backlog)
 		if (bind(socket_fd, p->ai_addr, p->ai_addrlen) == -1)
         {
             close(socket_fd);
-			perror("bind");
             continue;
         }
 
@@ -80,13 +79,11 @@ int create_socket(char *port, int backlog)
 
     if (p == NULL)  // if failed to create and bind a socket
     {
-		fprintf(stderr, "failed to bind\n");
         return -3;
     }
 
     if (listen(socket_fd, backlog) == -1)  // listen on the binded socket
     {
-		perror("listen");
 		return -4;
     }
 
@@ -102,6 +99,7 @@ void accept_loop(int socket_fd, char *msg)
 	socklen_t client_addr_len;
     int client_fd, sent_bytes;
 	int msg_len = strlen(msg);
+    char buf[128];  // for exceptions
 
 	while (1)
     {
@@ -111,7 +109,11 @@ void accept_loop(int socket_fd, char *msg)
 
         if (client_fd == -1)
         {
-			perror("accept");
+            if (errno != 0)
+            {
+                sprintf(buf, "SERVER: In 'accept': %s", strerror(errno));
+                log_print(buf, LOG_WARN, LOG_BOTH);
+            }
 			continue;
         }
 
@@ -120,7 +122,8 @@ void accept_loop(int socket_fd, char *msg)
 			close(socket_fd);  // child doesn't need the listener
             if (send(client_fd, msg, msg_len, 0) == -1)  // send data
             {
-                perror("send");
+                sprintf(buf, "SERVER: In 'send': %s", strerror(errno));
+                log_print(buf, LOG_WARN, LOG_BOTH);
             }
             close(client_fd);
             exit(0);

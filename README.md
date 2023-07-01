@@ -12,7 +12,8 @@ make
 ```
 
 # TODO
-- Add logging to a file (and with time)
+- SET UP LOG IN THE EXE FOLDER NOT IN ROOT
+- log when recieving a connection?
 - main.c:19
 - try to render some HTML
 - routes?
