@@ -7,6 +7,23 @@
 #include <stdlib.h>
 #include "server_utils.h"
 
+// Checks the port validity (if it is in the range [1025, 65535]).
+// Returns 1 if it is valid, 0 if it is not
+int check_port_validity(char *port)
+{
+    int port_num = atoi(port);
+
+    // if the port num is not in the range [1025, 65535]
+    if (port_num < 1025 || port_num > 65535)
+    {
+        return 0;
+    }
+    else
+    {
+        return 1;
+    }
+}
+
 // Creates, binds and listens to a socket.
 // Returns a file descriptor if no exeptions, if there are some, returns negative values.
 int create_socket(char *port, int backlog)
