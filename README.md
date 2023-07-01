@@ -12,7 +12,7 @@ make
 ```
 
 # TODO
-- CMake
+- Add automatic testing with CMake
 - Port and backlog as CLI args?
 - Add logging to a file (and with time)
 - main.c:19
