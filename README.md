@@ -12,9 +12,8 @@ make
 ```
 
 # TODO
-- SET UP LOG IN THE EXE FOLDER NOT IN ROOT
 - log when recieving a connection?
-- main.c:19
+- main.c:98
 - try to render some HTML
 - routes?
 - forms?

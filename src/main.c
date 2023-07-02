@@ -5,11 +5,13 @@
 
 #include "server_utils.h"
 #include "../lib/logger.h"
+#include "../lib/get_exec_path.h"
+
+#define MAX_PATH_BUF_SIZE 512
+#define LOG_FILENAME "serverlog.log"
 
 int main(int argc, char **argv)
 {
-    log_set_logfile("../log.txt");
-
     char *port;
     int backlog;
 
@@ -42,6 +44,26 @@ int main(int argc, char **argv)
         printf("USAGE: server PORT [BACKLOG]\nThe default value for BACKLOG is 1000\n");
         return 3;
     }
+
+    // get the path to the executable to set up logfile
+    char logfile_path[512];
+    if (get_executable_path(logfile_path, MAX_PATH_BUF_SIZE) == -1)
+    {
+        printf("Failed to get path to executable\n");
+        return 8;
+    }
+
+    // find index of last / or \ in path
+    #ifdef _WIN32
+        int last_occurrence = strrchr(logfile_path, '\\') - logfile_path;
+    #endif
+    #ifdef unix
+        int last_occurrence = strrchr(logfile_path, '/') - logfile_path;
+    #endif
+
+    logfile_path[last_occurrence + 1] = '\0'; // cut the path after the last '/'
+    strcat(logfile_path, LOG_FILENAME);
+    log_set_logfile(logfile_path);
 
     int socket_fd = create_socket(port, backlog);
     char buf[128];  // for exceptions
