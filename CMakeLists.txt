@@ -6,3 +6,7 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_subdirectory(lib)
 add_subdirectory(src)
 add_subdirectory(tests)
+
+enable_testing ()
+add_test (NAME check_port_validity COMMAND test_check_port_validity)
+add_test (NAME create_socket COMMAND test_create_socket)
