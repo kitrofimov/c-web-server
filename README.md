@@ -12,7 +12,6 @@ make
 ```
 
 # TODO
-- add formatting to the `log_print` (then need to fix `sprintf`'s with `log_print`'s)
 - main.c:98
 - fix double `SERVER: Got connection from ...` logs
 - give `get_exec_path.c`, `logger.c` and `console_utils.h` own repositories

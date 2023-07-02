@@ -117,8 +117,7 @@ void accept_loop(int socket_fd, char *msg)
         {
             if (errno != 0)
             {
-                sprintf(exceptions_buf, "SERVER: In 'accept': %s", strerror(errno));
-                log_print(exceptions_buf, LOG_WARN, LOG_BOTH);
+                log_print(LOG_WARN, LOG_BOTH, "SERVER: In 'accept': %s", strerror(errno));
             }
 			continue;
         }
@@ -136,16 +135,14 @@ void accept_loop(int socket_fd, char *msg)
             inet_ntop(AF_INET6, &ipv4_addr, ip_str, INET6_ADDRSTRLEN);
         }
 
-        sprintf(log_str, "SERVER: Got connection from %s", ip_str);
-        log_print(log_str, LOG_INFO, LOG_BOTH);
+        log_print(LOG_INFO, LOG_BOTH, "SERVER: Got connection from %s", ip_str);
 
 		if (!fork())  // child process
 		{
 			close(socket_fd);  // child doesn't need the listener
             if (send(client_fd, msg, msg_len, 0) == -1)  // send data
             {
-                sprintf(exceptions_buf, "SERVER: In 'send': %s", strerror(errno));
-                log_print(exceptions_buf, LOG_WARN, LOG_BOTH);
+                log_print(LOG_WARN, LOG_BOTH, "SERVER: In 'send': %s", strerror(errno));
             }
             close(client_fd);
             exit(0);

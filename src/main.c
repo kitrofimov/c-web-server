@@ -70,28 +70,26 @@ int main(int argc, char **argv)
     // exception handling (logging)
     if (socket_fd > 0)
     {
-        log_print("SERVER: Socket created", LOG_INFO, LOG_BOTH);
+        log_print(LOG_INFO, LOG_BOTH, "SERVER: Socket created");
     }
     else if (socket_fd == -1)
     {
-        log_print("SERVER: Failed to recieve IP information (getaddrinfo)", LOG_FATAL, LOG_BOTH);
+        log_print(LOG_FATAL, LOG_BOTH, "SERVER: Failed to recieve IP information (getaddrinfo)");
         return 4;
     }
     else if (socket_fd == -2)
     {
-        sprintf(exceptions_buf, "SERVER: In 'setsockopt': %s", strerror(errno));
-        log_print(exceptions_buf, LOG_FATAL, LOG_BOTH);
+        log_print(LOG_FATAL, LOG_BOTH, "SERVER: In 'setsockopt': %s", strerror(errno));
         return 5;
     }
     else if (socket_fd == -3)
     {
-        log_print("SERVER: Failed to bind", LOG_FATAL, LOG_BOTH);
+        log_print(LOG_FATAL, LOG_BOTH, "SERVER: Failed to bind");
         return 6;
     }
     else if (socket_fd == -4)
     {
-        sprintf(exceptions_buf, "SERVER: In 'listen': %s", strerror(errno));
-        log_print(exceptions_buf, LOG_FATAL, LOG_BOTH);
+        log_print(LOG_FATAL, LOG_BOTH, "SERVER: In 'listen': %s", strerror(errno));
         return 7;
     }
 
@@ -106,7 +104,7 @@ int main(int argc, char **argv)
     //     exit(1);
     // }
 
-	log_print("SERVER: Listening to connections...", LOG_INFO, LOG_BOTH);
+	log_print(LOG_INFO, LOG_BOTH, "SERVER: Listening to connections...");
 
     accept_loop(socket_fd, "<h1>Hello, client</h1>");
 }

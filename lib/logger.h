@@ -14,6 +14,6 @@
 #define LOG_BOTH 2
 
 void log_set_logfile(char *path);
-int log_print(char *msg, int level, int to_where);
+int log_print(int level, int to_where, char *format, ...);
 
 #endif
