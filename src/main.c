@@ -2,13 +2,15 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <signal.h>
 
 #include "server_utils.h"
 #include "../lib/logger.h"
 #include "../lib/get_exec_path.h"
+#include "config.h"
 
-#define MAX_PATH_BUF_SIZE 512
-#define LOG_FILENAME "serverlog.log"
+void sigchld_handler(int s);
 
 int main(int argc, char **argv)
 {
@@ -46,22 +48,8 @@ int main(int argc, char **argv)
     }
 
     // get the path to the executable to set up logfile
-    char logfile_path[512];
-    if (get_executable_path(logfile_path, MAX_PATH_BUF_SIZE) == -1)
-    {
-        printf("Failed to get path to executable\n");
-        return 8;
-    }
-
-    // find index of last / or \ in path
-    #ifdef _WIN32
-        int last_occurrence = strrchr(logfile_path, '\\') - logfile_path;
-    #endif
-    #ifdef unix
-        int last_occurrence = strrchr(logfile_path, '/') - logfile_path;
-    #endif
-
-    logfile_path[last_occurrence + 1] = '\0'; // cut the path after the last '/'
+    char logfile_path[MAX_PATH_BUF_SIZE];
+    get_executable_folder(logfile_path, MAX_PATH_BUF_SIZE);
     strcat(logfile_path, LOG_FILENAME);
     log_set_logfile(logfile_path);
 
@@ -93,18 +81,32 @@ int main(int argc, char **argv)
         return 7;
     }
 
-	// TODO: understand what this thing is 
+    // kill all unused child processes
 	// https://beej.us/guide/bgnet/html/split/client-server-background.html#a-simple-stream-server
-
-	// sa.sa_handler = sigchld_handler; // reap all dead processes
-    // sigemptyset(&sa.sa_mask);
-    // sa.sa_flags = SA_RESTART;
-    // if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-    //     perror("sigaction");
-    //     exit(1);
-    // }
+    struct sigaction sa;
+	sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("sigaction");
+        return 8;
+    }
 
 	log_print(LOG_INFO, LOG_BOTH, "SERVER: Listening to connections...");
 
-    accept_loop(socket_fd, "<h1>Hello, client</h1>");
+    char *response = render_template("html/index.html");
+    if (response == NULL)
+    {
+        log_print(LOG_FATAL, LOG_BOTH, "Failed to read files");
+        return 10;
+    }
+    accept_loop(socket_fd, response);
+}
+
+void sigchld_handler(int s)
+{
+    // waitpid() might overwrite errno, so we save and restore it:
+    int saved_errno = errno;
+    while(waitpid(-1, NULL, WNOHANG) > 0);
+    errno = saved_errno;
 }

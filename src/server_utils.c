@@ -10,6 +10,8 @@
 
 #include "server_utils.h"
 #include "../lib/logger.h"
+#include "../lib/get_exec_path.h"
+#include "config.h"
 
 // Checks the port validity (if it is in the range [1025, 65535]).
 // Returns 1 if it is valid, 0 if it is not
@@ -105,6 +107,7 @@ void accept_loop(int socket_fd, char *msg)
 	int msg_len = strlen(msg);
     char exceptions_buf[128];  // for exceptions
     char ip_str[INET6_ADDRSTRLEN];
+    int port;
     char log_str[INET6_ADDRSTRLEN + 30];
 
 	while (1)
@@ -115,7 +118,7 @@ void accept_loop(int socket_fd, char *msg)
 
         if (client_fd == -1)
         {
-            if (errno != 0)
+            if (errno != 0)  // if some error happened
             {
                 log_print(LOG_WARN, LOG_BOTH, "SERVER: In 'accept': %s", strerror(errno));
             }
@@ -128,14 +131,17 @@ void accept_loop(int socket_fd, char *msg)
         {
             ipv4_addr = ((struct sockaddr_in*) &client_addr)->sin_addr;
             inet_ntop(AF_INET, &ipv4_addr, ip_str, INET_ADDRSTRLEN);
+            port = ntohs(((struct sockaddr_in*) &client_addr)->sin_port);
         }
         else if (((struct sockaddr*) &client_addr)->sa_family == AF_INET6)  // if using ipv6
         {
             ipv6_addr = ((struct sockaddr_in6*) &client_addr)->sin6_addr;
             inet_ntop(AF_INET6, &ipv4_addr, ip_str, INET6_ADDRSTRLEN);
+            port = ntohs(((struct sockaddr_in6*) &client_addr)->sin6_port);
         }
 
-        log_print(LOG_INFO, LOG_BOTH, "SERVER: Got connection from %s", ip_str);
+        log_print(LOG_INFO, LOG_BOTH, "SERVER: Got connection from %s:%i",
+                  ip_str, port);
 
 		if (!fork())  // child process
 		{
@@ -149,4 +155,55 @@ void accept_loop(int socket_fd, char *msg)
         }
         close(client_fd);  // parent doesn't need the accepter anymore
     }
+}
+
+char *render_template(char *rel_path_to_html)
+{
+    char exec_folder[MAX_PATH_BUF_SIZE];
+    get_executable_folder(exec_folder, MAX_PATH_BUF_SIZE);
+
+    // open html
+    char path_to_html[MAX_PATH_BUF_SIZE];
+    strcpy(path_to_html, exec_folder);
+    strcat(path_to_html, rel_path_to_html);
+
+    FILE *pHtml = fopen(path_to_html, "r");
+    if (pHtml == NULL)
+    {
+        return NULL;
+    }
+
+    // open response_template
+    char path_to_template[MAX_PATH_BUF_SIZE];
+    strcpy(path_to_template, exec_folder);
+    strcat(path_to_template, RESPONSE_TEMPLATES_DIR "/200.txt");
+
+    FILE *pResponse_template = fopen(path_to_template, "r");
+    if (pResponse_template == NULL)
+    {
+        fclose(pHtml);
+        return NULL;
+    }
+
+    // calculate html size (`fsize` is not crossplatform)
+    fseek(pHtml, 0, SEEK_END);
+    unsigned long html_size = ftell(pHtml);
+    fseek(pHtml, 0, SEEK_SET);
+
+    // read html
+    char *html = malloc(html_size);
+    fread(html, 1, html_size, pHtml);
+    fclose(pHtml);
+
+    // calculate response_template size (`fsize` is not crossplatform)
+    fseek(pResponse_template, 0, SEEK_END);
+    unsigned long response_template_size = ftell(pResponse_template);
+    fseek(pResponse_template, 0, SEEK_SET);
+
+    // read response template
+    char *response_template = malloc(html_size + response_template_size);
+    fread(response_template, 1, response_template_size, pResponse_template);
+    fclose(pResponse_template);
+
+    return strcat(response_template, html);
 }

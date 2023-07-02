@@ -30,3 +30,26 @@ int get_executable_path(char *buf, int bufsize)
         return 0;
     #endif
 }
+
+// Get path to executable's folder. Cross-platform function.
+// Returns 0 on success, -1 if some error (and sets `errno` in such case).
+int get_executable_folder(char *buf, int bufsize)
+{
+    if (get_executable_path(buf, bufsize) == -1)
+    {
+        printf("Failed to get path to executable\n");
+        return -1;
+    }
+
+    // find index of last / or \ in path
+    #ifdef _WIN32
+        int last_occurrence = strrchr(buf, '\\') - buf;
+    #endif
+    #ifdef unix
+        int last_occurrence = strrchr(buf, '/') - buf;
+    #endif
+
+    buf[last_occurrence + 1] = '\0'; // cut the path after the last '/'
+
+    return 0;
+}

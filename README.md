@@ -1,24 +1,18 @@
 # c-web-server
-The name is self-explanatory. This is a web server in C programming language which is currently in development.
+The name is self-explanatory. This is a web server in C, which I am developing as a side-project. I don't plan on making this a "framework" yet. Maybe later.
 
-# Installation
-
-You can download binaries from `Releases`, or build from source:
-
-```bash
-mkdir build & cd build
-cmake ..
-make
-```
+<!-- added killing of unused child processes -->
 
 # TODO
-- main.c:98
-- fix double `SERVER: Got connection from ...` logs
+- try to render some HTML
 - give `get_exec_path.c`, `logger.c` and `console_utils.h` own repositories
 
 ---
 
-- try to render some HTML
 - routes?
 - forms?
 - cookies? (sessions?)
+
+# ISSUES
+
+- `accept()` accepts the connection twice (if connecting from browser)
