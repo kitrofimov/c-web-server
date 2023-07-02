@@ -66,7 +66,7 @@ int main(int argc, char **argv)
     log_set_logfile(logfile_path);
 
     int socket_fd = create_socket(port, backlog);
-    char buf[128];  // for exceptions
+    char exceptions_buf[128];
     // exception handling (logging)
     if (socket_fd > 0)
     {
@@ -79,8 +79,8 @@ int main(int argc, char **argv)
     }
     else if (socket_fd == -2)
     {
-        sprintf(buf, "SERVER: In 'setsockopt': %s", strerror(errno));
-        log_print(buf, LOG_FATAL, LOG_BOTH);
+        sprintf(exceptions_buf, "SERVER: In 'setsockopt': %s", strerror(errno));
+        log_print(exceptions_buf, LOG_FATAL, LOG_BOTH);
         return 5;
     }
     else if (socket_fd == -3)
@@ -90,8 +90,8 @@ int main(int argc, char **argv)
     }
     else if (socket_fd == -4)
     {
-        sprintf(buf, "SERVER: In 'listen': %s", strerror(errno));
-        log_print(buf, LOG_FATAL, LOG_BOTH);
+        sprintf(exceptions_buf, "SERVER: In 'listen': %s", strerror(errno));
+        log_print(exceptions_buf, LOG_FATAL, LOG_BOTH);
         return 7;
     }
 

@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <arpa/inet.h>
 
 #include "server_utils.h"
 #include "../lib/logger.h"
@@ -97,33 +98,54 @@ void accept_loop(int socket_fd, char *msg)
     // initialize variables for incoming connections
     struct sockaddr_storage client_addr;
 	socklen_t client_addr_len;
+    struct in_addr ipv4_addr;
+    struct in6_addr ipv6_addr;
+
     int client_fd, sent_bytes;
 	int msg_len = strlen(msg);
-    char buf[128];  // for exceptions
+    char exceptions_buf[128];  // for exceptions
+    char ip_str[INET6_ADDRSTRLEN];
+    char log_str[INET6_ADDRSTRLEN + 30];
 
 	while (1)
     {
 		// accept the incoming connection
         client_addr_len = sizeof(client_addr);
-        client_fd = accept(socket_fd, (struct sockaddr *)&client_addr, &client_addr_len);
+        client_fd = accept(socket_fd, (struct sockaddr*)&client_addr, &client_addr_len);
 
         if (client_fd == -1)
         {
             if (errno != 0)
             {
-                sprintf(buf, "SERVER: In 'accept': %s", strerror(errno));
-                log_print(buf, LOG_WARN, LOG_BOTH);
+                sprintf(exceptions_buf, "SERVER: In 'accept': %s", strerror(errno));
+                log_print(exceptions_buf, LOG_WARN, LOG_BOTH);
             }
 			continue;
         }
 
-		if (!fork())  // this is the child process
+        // get the IP string
+        // https://stackoverflow.com/questions/3060950/how-to-get-ip-address-from-sock-structure-in-c
+        if (((struct sockaddr*) &client_addr)->sa_family == AF_INET)  // if using ipv4
+        {
+            ipv4_addr = ((struct sockaddr_in*) &client_addr)->sin_addr;
+            inet_ntop(AF_INET, &ipv4_addr, ip_str, INET_ADDRSTRLEN);
+        }
+        else if (((struct sockaddr*) &client_addr)->sa_family == AF_INET6)  // if using ipv6
+        {
+            ipv6_addr = ((struct sockaddr_in6*) &client_addr)->sin6_addr;
+            inet_ntop(AF_INET6, &ipv4_addr, ip_str, INET6_ADDRSTRLEN);
+        }
+
+        sprintf(log_str, "SERVER: Got connection from %s", ip_str);
+        log_print(log_str, LOG_INFO, LOG_BOTH);
+
+		if (!fork())  // child process
 		{
 			close(socket_fd);  // child doesn't need the listener
             if (send(client_fd, msg, msg_len, 0) == -1)  // send data
             {
-                sprintf(buf, "SERVER: In 'send': %s", strerror(errno));
-                log_print(buf, LOG_WARN, LOG_BOTH);
+                sprintf(exceptions_buf, "SERVER: In 'send': %s", strerror(errno));
+                log_print(exceptions_buf, LOG_WARN, LOG_BOTH);
             }
             close(client_fd);
             exit(0);
