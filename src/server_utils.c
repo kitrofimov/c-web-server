@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <sys/wait.h>
 
 #include "server_utils.h"
 #include "../lib/logger.h"
@@ -94,8 +95,8 @@ int create_socket(char *port, int backlog)
 }
 
 // Starts an accept loop. Does not return a value.
-// Currently only sends the `msg` to the client.
-void accept_loop(int socket_fd, char *msg)
+// Currently only sends the `response` to the client.
+void accept_loop(int socket_fd, char *response)
 {
     // initialize variables for incoming connections
     struct sockaddr_storage client_addr;
@@ -104,11 +105,13 @@ void accept_loop(int socket_fd, char *msg)
     struct in6_addr ipv6_addr;
 
     int client_fd, sent_bytes;
-	int msg_len = strlen(msg);
+	int response_len = strlen(response);
     char exceptions_buf[128];  // for exceptions
+
     char ip_str[INET6_ADDRSTRLEN];
     int port;
-    char log_str[INET6_ADDRSTRLEN + 30];
+
+    char request[READ_BUF_SIZE];
 
 	while (1)
     {
@@ -120,7 +123,7 @@ void accept_loop(int socket_fd, char *msg)
         {
             if (errno != 0)  // if some error happened
             {
-                log_print(LOG_WARN, LOG_BOTH, "SERVER: In 'accept': %s", strerror(errno));
+                log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'accept': %s", strerror(errno));
             }
 			continue;
         }
@@ -140,16 +143,20 @@ void accept_loop(int socket_fd, char *msg)
             port = ntohs(((struct sockaddr_in6*) &client_addr)->sin6_port);
         }
 
-        log_print(LOG_INFO, LOG_BOTH, "SERVER: Got connection from %s:%i",
-                  ip_str, port);
-
 		if (!fork())  // child process
 		{
 			close(socket_fd);  // child doesn't need the listener
-            if (send(client_fd, msg, msg_len, 0) == -1)  // send data
-            {
-                log_print(LOG_WARN, LOG_BOTH, "SERVER: In 'send': %s", strerror(errno));
-            }
+
+            if (recv(client_fd, request, READ_BUF_SIZE, 0) == -1)
+                log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'recv': %s", strerror(errno));
+
+            char *newline = strchr(request, '\n');
+            *newline = '\0';
+            log_print(LOG_INFO, LOG_BOTH, "SERVER: %s:%i; %s", ip_str, port, request);
+
+            if (send(client_fd, response, response_len, 0) == -1)  // send data
+                log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'send': %s", strerror(errno));
+
             close(client_fd);
             exit(0);
         }
@@ -206,4 +213,12 @@ char *render_template(char *rel_path_to_html)
     fclose(pResponse_template);
 
     return strcat(response_template, html);
+}
+
+void sigchld_handler(int s)
+{
+    // waitpid() might overwrite errno, so we save and restore it:
+    int saved_errno = errno;
+    while(waitpid(-1, NULL, WNOHANG) > 0);
+    errno = saved_errno;
 }

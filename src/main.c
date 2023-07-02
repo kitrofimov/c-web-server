@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/wait.h>
 #include <signal.h>
 
 #include "server_utils.h"
@@ -10,7 +9,6 @@
 #include "../lib/get_exec_path.h"
 #include "config.h"
 
-void sigchld_handler(int s);
 
 int main(int argc, char **argv)
 {
@@ -101,12 +99,4 @@ int main(int argc, char **argv)
         return 10;
     }
     accept_loop(socket_fd, response);
-}
-
-void sigchld_handler(int s)
-{
-    // waitpid() might overwrite errno, so we save and restore it:
-    int saved_errno = errno;
-    while(waitpid(-1, NULL, WNOHANG) > 0);
-    errno = saved_errno;
 }
