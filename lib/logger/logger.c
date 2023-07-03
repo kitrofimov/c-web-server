@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-#include "console_utils.h"
+#include "../console_utils/console_utils.h"
 #include "logger.h"
 
 #define SIZE_MSG_FORMATTED 128

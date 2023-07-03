@@ -8,27 +8,67 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
+#include <signal.h>
 
-#include "server_utils.h"
-#include "../lib/logger.h"
-#include "../lib/get_exec_path.h"
+#include "server.h"
+#include "../lib/logger/logger.h"
+#include "../lib/get_exec_path/get_exec_path.h"
 #include "config.h"
 
-// Checks the port validity (if it is in the range [1025, 65535]).
-// Returns 1 if it is valid, 0 if it is not
-int check_port_validity(char *port)
-{
-    int port_num = atoi(port);
+struct route *routes_ll;
 
-    // if the port num is not in the range [1025, 65535]
-    if (port_num < 1025 || port_num > 65535)
+// Start a server.
+// The valid ports are between 1025 and 65535.
+int start_server(char *port, int backlog)
+{
+    // get the path to the executable to set up logfile
+    char logfile_path[MAX_PATH_BUF_SIZE];
+    get_executable_folder(logfile_path, MAX_PATH_BUF_SIZE);
+    strcat(logfile_path, LOG_FILENAME);
+    log_set_logfile(logfile_path);
+
+    int socket_fd = create_socket(port, backlog);
+    char exceptions_buf[128];
+    // exception handling (logging)
+    if (socket_fd > 0)
     {
-        return 0;
+        log_print(LOG_INFO, LOG_BOTH, "SERVER: Socket created");
     }
-    else
+    else if (socket_fd == -1)
     {
+        log_print(LOG_FATAL, LOG_BOTH, "SERVER: Failed to recieve IP information (getaddrinfo)");
         return 1;
     }
+    else if (socket_fd == -2)
+    {
+        log_print(LOG_FATAL, LOG_BOTH, "SERVER: In 'setsockopt': %s", strerror(errno));
+        return 2;
+    }
+    else if (socket_fd == -3)
+    {
+        log_print(LOG_FATAL, LOG_BOTH, "SERVER: Failed to bind");
+        return 3;
+    }
+    else if (socket_fd == -4)
+    {
+        log_print(LOG_FATAL, LOG_BOTH, "SERVER: In 'listen': %s", strerror(errno));
+        return 4;
+    }
+
+    // kill all unused child processes
+	// https://beej.us/guide/bgnet/html/split/client-server-background.html#a-simple-stream-server
+    struct sigaction sa;
+	sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("sigaction");
+        return 5;
+    }
+
+	log_print(LOG_INFO, LOG_BOTH, "SERVER: Listening to connections...");
+
+    accept_loop(socket_fd);
 }
 
 // Creates, binds and listens to a socket.
@@ -94,9 +134,18 @@ int create_socket(char *port, int backlog)
     return socket_fd;
 }
 
+// Helper function to kill all unused child processes in `start_server`.
+void sigchld_handler(int s)
+{
+    // waitpid() might overwrite errno, so we save and restore it:
+    int saved_errno = errno;
+    while(waitpid(-1, NULL, WNOHANG) > 0);
+    errno = saved_errno;
+}
+
 // Starts an accept loop. Does not return a value.
 // Currently only sends the `response` to the client.
-void accept_loop(int socket_fd, char *response)
+void accept_loop(int socket_fd)
 {
     // initialize variables for incoming connections
     struct sockaddr_storage client_addr;
@@ -105,13 +154,14 @@ void accept_loop(int socket_fd, char *response)
     struct in6_addr ipv6_addr;
 
     int client_fd, sent_bytes;
-	int response_len = strlen(response);
     char exceptions_buf[128];  // for exceptions
 
     char ip_str[INET6_ADDRSTRLEN];
     int port;
 
     char request[READ_BUF_SIZE];
+    char response[MAX_RESPONSE_SIZE];
+    response[0] = '\0';
 
 	while (1)
     {
@@ -147,12 +197,49 @@ void accept_loop(int socket_fd, char *response)
 		{
 			close(socket_fd);  // child doesn't need the listener
 
-            if (recv(client_fd, request, READ_BUF_SIZE, 0) == -1)
+            if (recv(client_fd, request, READ_BUF_SIZE, 0) == -1)  // reading request
                 log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'recv': %s", strerror(errno));
 
+            // cutting the request at first newline (so now we only have the first line)
             char *newline = strchr(request, '\n');
             *newline = '\0';
             log_print(LOG_INFO, LOG_BOTH, "SERVER: %s:%i; %s", ip_str, port, request);
+
+            char method[8];
+            char route_path[MAX_URI_SIZE];
+
+            strncpy(method, request, 8);
+            method[7] = '\0';
+            char *space = strchr(method, ' ');  // cut the method
+            *space = '\0';
+
+            if (strcmp(method, "GET") == 0)  // if it is GET method
+            {
+                // find the first space in string (that's the one before URI)
+                // and initialize a new string starting with it
+                char *route_path = strchr(request, ' ') + 1;
+                space = strchr(route_path, ' ');  // cut the route_path
+                *space = '\0';
+
+                // if the route_path in routes linked list, render it
+                // if not, render 404
+
+                for (struct route *p = routes_ll; p != NULL; p = p->next)
+                {
+                    if (strcmp(p->uri, route_path) == 0)
+                    {
+                        strncpy(response, render_template(200, p->html_path), MAX_RESPONSE_SIZE);
+                        break;
+                    }
+                }
+                strncpy(response, render_template(404, HTML_IF_404), MAX_RESPONSE_SIZE);
+            }
+            else  // if it is not a GET method
+            {
+                strncpy(response, render_template(405, HTML_IF_405), MAX_RESPONSE_SIZE);
+            }
+
+            int response_len = strlen(response);
 
             if (send(client_fd, response, response_len, 0) == -1)  // send data
                 log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'send': %s", strerror(errno));
@@ -164,7 +251,8 @@ void accept_loop(int socket_fd, char *response)
     }
 }
 
-char *render_template(char *rel_path_to_html)
+// Render a template. Basically concatenating the response template and contents of an HTML file.
+char *render_template(int code, char *rel_path_to_html)
 {
     char exec_folder[MAX_PATH_BUF_SIZE];
     get_executable_folder(exec_folder, MAX_PATH_BUF_SIZE);
@@ -183,7 +271,12 @@ char *render_template(char *rel_path_to_html)
     // open response_template
     char path_to_template[MAX_PATH_BUF_SIZE];
     strcpy(path_to_template, exec_folder);
-    strcat(path_to_template, RESPONSE_TEMPLATES_DIR "/200.txt");
+
+    char template_filename[9];
+    snprintf(template_filename, 9, "/%i.txt", code);
+
+    strcat(path_to_template, RESPONSE_TEMPLATES_DIR);
+    strcat(path_to_template, template_filename);
 
     FILE *pResponse_template = fopen(path_to_template, "r");
     if (pResponse_template == NULL)
@@ -215,10 +308,30 @@ char *render_template(char *rel_path_to_html)
     return strcat(response_template, html);
 }
 
-void sigchld_handler(int s)
+// Checks the port validity (if it is in the range [1025, 65535]).
+// Returns 1 if it is valid, 0 if it is not
+int check_port_validity(char *port)
 {
-    // waitpid() might overwrite errno, so we save and restore it:
-    int saved_errno = errno;
-    while(waitpid(-1, NULL, WNOHANG) > 0);
-    errno = saved_errno;
+    int port_num = atoi(port);
+
+    // if the port num is not in the range [1025, 65535]
+    if (port_num < 1025 || port_num > 65535)
+    {
+        return 0;
+    }
+    else
+    {
+        return 1;
+    }
+}
+
+// Add new route to linked list.
+void add_route(char *uri, char *html_path)
+{
+    struct route *new_route = malloc(sizeof(struct route));
+    strncpy(new_route->uri, uri, MAX_URI_SIZE);
+    strncpy(new_route->html_path, html_path, MAX_HTML_PATH_SIZE);
+
+    new_route->next = routes_ll;
+    routes_ll = new_route;
 }
