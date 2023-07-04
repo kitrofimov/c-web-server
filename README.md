@@ -39,6 +39,13 @@ int start_server(char *port, int backlog);
 
 Start a server. The valid ports are between 1025 and 65535. `backlog` is the number of connections allowed on the incoming queue.
 
+Returns error code if some error occurred (and logs it), returns nothing if everything is good (because starts an infinite loop)
+
+* `1` - failed to recieve IP information (getaddrinfo)
+* `2` - `setsockopt` failure
+* `3` - failed to bind
+* `4` - `listen` failure
+
 ## `create_socket`
 
 ```c
@@ -89,8 +96,10 @@ void add_route(char *uri, char *html_path);
 Adds a route to a linked list of routes.
 
 # TODO
-- refactor the code
+- fix memory errors and refactor `accept_loop` and `render_template`.
 - add `free()`'ing the routes linked list
+- `strcpy` vs `strncpy`
 
 # ISSUES
 - ~~`accept()` accepts the connection twice (if connecting from browser)~~ **It is like that because most browsers auto-request /favicon.ico file (even if there is no such file on the server)**
+- `The byte stream was erroneous according to the character encoding that was declared. The character encoding declaration may be incorrect.` - Will be fixed with memory errors in `accept_loop` and `render_template`.

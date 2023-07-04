@@ -23,8 +23,8 @@ struct route *routes_ll;
 int start_server(char *port, int backlog)
 {
     // get the path to the executable to set up logfile
-    char logfile_path[MAX_PATH_BUF_SIZE];
-    get_executable_folder(logfile_path, MAX_PATH_BUF_SIZE);
+    char logfile_path[PATH_BUF_SIZE];
+    get_executable_folder(logfile_path, PATH_BUF_SIZE);
     strcat(logfile_path, LOG_FILENAME);
     log_set_logfile(logfile_path);
 
@@ -162,14 +162,14 @@ void accept_loop(int socket_fd)
     int port;
 
     char request[READ_BUF_SIZE];
-    char response[MAX_RESPONSE_SIZE];
+    char response[RESPONSE_SIZE];
     response[0] = '\0';
 
 	while (1)
     {
 		// accept the incoming connection
         client_addr_len = sizeof(client_addr);
-        client_fd = accept(socket_fd, (struct sockaddr*)&client_addr, &client_addr_len);
+        client_fd = accept(socket_fd, (struct sockaddr*) &client_addr, &client_addr_len);
 
         if (client_fd == -1)
         {
@@ -208,7 +208,7 @@ void accept_loop(int socket_fd)
             log_print(LOG_INFO, LOG_BOTH, "SERVER: %s:%i; %s", ip_str, port, request);
 
             char method[8];
-            char route_path[MAX_URI_SIZE];
+            char route_path[URI_SIZE];
 
             strcpy(method, request);
             method[7] = '\0';
@@ -258,11 +258,11 @@ void accept_loop(int socket_fd)
 // Render a template. Basically concatenating the response template and contents of an HTML file.
 char *render_template(int code, char *rel_path_to_html)
 {
-    char exec_folder[MAX_PATH_BUF_SIZE];
-    get_executable_folder(exec_folder, MAX_PATH_BUF_SIZE);
+    char exec_folder[PATH_BUF_SIZE];
+    get_executable_folder(exec_folder, PATH_BUF_SIZE);
 
     // open html
-    char path_to_html[MAX_PATH_BUF_SIZE];
+    char path_to_html[PATH_BUF_SIZE];
     strcpy(path_to_html, exec_folder);
     strcat(path_to_html, rel_path_to_html);
 
@@ -273,7 +273,7 @@ char *render_template(int code, char *rel_path_to_html)
     }
 
     // open response_template
-    char path_to_template[MAX_PATH_BUF_SIZE];
+    char path_to_template[PATH_BUF_SIZE];
     strcpy(path_to_template, exec_folder);
 
     char template_filename[9];
@@ -295,8 +295,8 @@ char *render_template(int code, char *rel_path_to_html)
     fclose(pHtml);
 
     // read response template
-    char response_template[MAX_RESPONSE_SIZE];
-    fread(response_template, 1, MAX_RESPONSE_SIZE, pResponse_template);
+    char response_template[RESPONSE_SIZE];
+    fread(response_template, 1, RESPONSE_SIZE, pResponse_template);
     fclose(pResponse_template);
 
     return strcat(response_template, html);
@@ -306,8 +306,8 @@ char *render_template(int code, char *rel_path_to_html)
 void add_route(char *uri, char *html_path)
 {
     struct route *new_route = malloc(sizeof(struct route));
-    strncpy(new_route->uri, uri, MAX_URI_SIZE);
-    strncpy(new_route->html_path, html_path, MAX_HTML_PATH_SIZE);
+    strncpy(new_route->uri, uri, URI_SIZE);
+    strncpy(new_route->html_path, html_path, HTML_PATH_SIZE);
 
     new_route->next = routes_ll;
     routes_ll = new_route;

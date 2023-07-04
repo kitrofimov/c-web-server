@@ -5,8 +5,8 @@
 
 struct route
 {
-    char uri[MAX_URI_SIZE];
-    char html_path[MAX_HTML_PATH_SIZE];
+    char uri[URI_SIZE];
+    char html_path[HTML_PATH_SIZE];
     struct route *next;
 };
 
