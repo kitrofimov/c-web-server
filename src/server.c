@@ -23,11 +23,35 @@ char *INTERNAL_SERVER_ERROR = "HTTP/1.1 500 Internal Server Error\n"
                                "Maybe you forgot to add the HTML files?";
 
 struct route *routes_ll;
+bool volatile running = true;
+
+void sigint_handler(int signum)
+{
+    struct route *tmp;
+    for (struct route *p = routes_ll; p != NULL; p = tmp)
+    {
+        tmp = p->next;
+        free(p);
+    }
+    printf("\n");
+    exit(0);
+}
+
+// Helper function to kill all unused child processes in `start_server`.
+void sigchld_handler(int signum)
+{
+    // waitpid() might overwrite errno, so we save and restore it:
+    int saved_errno = errno;
+    while(waitpid(-1, NULL, WNOHANG) > 0);
+    errno = saved_errno;
+}
 
 // Start a server.
 // The valid ports are between 1025 and 65535.
 int start_server(char *port, int backlog)
 {
+    signal(SIGINT, sigint_handler);
+
     // get the path to the executable to set up logfile
     char logfile_path[PATH_BUF_SIZE];
     get_executable_folder(logfile_path, PATH_BUF_SIZE);
@@ -139,15 +163,6 @@ int create_socket(char *port, int backlog)
     }
 
     return socket_fd;
-}
-
-// Helper function to kill all unused child processes in `start_server`.
-void sigchld_handler(int s)
-{
-    // waitpid() might overwrite errno, so we save and restore it:
-    int saved_errno = errno;
-    while(waitpid(-1, NULL, WNOHANG) > 0);
-    errno = saved_errno;
 }
 
 // Get IP string from client's connection information.
@@ -305,7 +320,7 @@ void accept_loop(int socket_fd)
     char ip_str[INET6_ADDRSTRLEN];
     int port;
 
-	while (1)
+	while (running)
     {
 		// accept the incoming connection
         client_addr_len = sizeof(client_addr);

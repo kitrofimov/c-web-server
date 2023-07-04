@@ -12,7 +12,7 @@ int main(void)
 }
 ```
 
-Currently this (library, I guess?) supports only `GET` requests and HTML routing (no form submission, etc.), and I don't think I will add more functionality in the closest future, as this project is not *currently* very fun to me.
+Currently this (library, I guess?) supports only `GET` requests and HTML routing (no form submitting, etc.), and I don't think I will add more functionality in the closest future, as this project is not *currently* very fun to me.
 
 # Build
 
@@ -61,14 +61,6 @@ Returns a file descriptor if no exeptions, if there are some, returns negative v
 * `-3` - failed to create and bind a socket
 * `-4` - failed to start listening
 
-## `sigchld_handler`
-
-```c
-void sigchld_handler(int s);
-```
-
-Helper function to kill all unused child processes in `start_server`.
-
 ## `get_ip_str`
 
 ```c
@@ -114,8 +106,9 @@ void add_route(char *uri, char *html_path);
 Adds a route to a linked list of routes.
 
 # TODO
-- add `free()`'ing the routes linked list
+- Form submitting
+- More HTTP methods
+- Cookies (sessions)
 
 # ISSUES
 - ~~`accept()` accepts the connection twice (if connecting from browser)~~ **It is like that because most browsers auto-request /favicon.ico file (even if there is no such file on the server)**
-- `The byte stream was erroneous according to the character encoding that was declared. The character encoding declaration may be incorrect.` - Will be fixed with memory errors in `accept_loop` and `render_template`.
