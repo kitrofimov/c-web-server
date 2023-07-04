@@ -96,9 +96,7 @@ void add_route(char *uri, char *html_path);
 Adds a route to a linked list of routes.
 
 # TODO
-- fix memory errors and refactor `accept_loop` and `render_template`.
 - add `free()`'ing the routes linked list
-- `strcpy` vs `strncpy`
 
 # ISSUES
 - ~~`accept()` accepts the connection twice (if connecting from browser)~~ **It is like that because most browsers auto-request /favicon.ico file (even if there is no such file on the server)**

@@ -16,6 +16,12 @@
 #include "../lib/get_exec_path/get_exec_path.h"
 #include "config.h"
 
+char *INTERNAL_SERVER_ERROR = "HTTP/1.1 500 Internal Server Error\n"
+                               "Content-Type: text/html; charset=utf-8\n"
+                               "\n"
+                               "<h1>Internal Server Error</h1>\n"
+                               "Maybe you forgot to add the HTML files?";
+
 struct route *routes_ll;
 
 // Start a server.
@@ -144,115 +150,30 @@ void sigchld_handler(int s)
     errno = saved_errno;
 }
 
-// Starts an accept loop. Does not return a value.
-// Currently only sends the `response` to the client.
-// A LOT OF memory errors here I guess. Sometime, I will fix them. I hope so.
-void accept_loop(int socket_fd)
+// Get IP string from client's connection information.
+// Sets ip_buf to IP, port_buf to PORT.
+// NOTE: `ip_buf` should be size INET6_ADDRSTRLEN.
+// https://stackoverflow.com/questions/3060950/how-to-get-ip-address-from-sock-structure-in-c
+void get_ip_str(struct sockaddr_storage client_addr, char *ip_buf, int *port_buf)
 {
-    // initialize variables for incoming connections
-    struct sockaddr_storage client_addr;
-	socklen_t client_addr_len;
     struct in_addr ipv4_addr;
     struct in6_addr ipv6_addr;
-
-    int client_fd, sent_bytes;
-    char exceptions_buf[128];  // for exceptions
-
-    char ip_str[INET6_ADDRSTRLEN];
     int port;
 
-    char request[READ_BUF_SIZE];
-    char response[RESPONSE_SIZE];
-    response[0] = '\0';
-
-	while (1)
+    if (((struct sockaddr*) &client_addr)->sa_family == AF_INET)  // if using ipv4
     {
-		// accept the incoming connection
-        client_addr_len = sizeof(client_addr);
-        client_fd = accept(socket_fd, (struct sockaddr*) &client_addr, &client_addr_len);
-
-        if (client_fd == -1)
-        {
-            if (errno != 0)  // if some error happened
-            {
-                log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'accept': %s", strerror(errno));
-            }
-			continue;
-        }
-
-        // get the IP string
-        // https://stackoverflow.com/questions/3060950/how-to-get-ip-address-from-sock-structure-in-c
-        if (((struct sockaddr*) &client_addr)->sa_family == AF_INET)  // if using ipv4
-        {
-            ipv4_addr = ((struct sockaddr_in*) &client_addr)->sin_addr;
-            inet_ntop(AF_INET, &ipv4_addr, ip_str, INET_ADDRSTRLEN);
-            port = ntohs(((struct sockaddr_in*) &client_addr)->sin_port);
-        }
-        else if (((struct sockaddr*) &client_addr)->sa_family == AF_INET6)  // if using ipv6
-        {
-            ipv6_addr = ((struct sockaddr_in6*) &client_addr)->sin6_addr;
-            inet_ntop(AF_INET6, &ipv4_addr, ip_str, INET6_ADDRSTRLEN);
-            port = ntohs(((struct sockaddr_in6*) &client_addr)->sin6_port);
-        }
-
-		if (!fork())  // child process
-		{
-			close(socket_fd);  // child doesn't need the listener
-
-            if (recv(client_fd, request, READ_BUF_SIZE, 0) == -1)  // reading request
-                log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'recv': %s", strerror(errno));
-
-            // cutting the request at first newline (so now we only have the first line)
-            char *newline = strchr(request, '\n');
-            *newline = '\0';
-            log_print(LOG_INFO, LOG_BOTH, "SERVER: %s:%i; %s", ip_str, port, request);
-
-            char method[8];
-            char route_path[URI_SIZE];
-
-            strcpy(method, request);
-            method[7] = '\0';
-            char *space = strchr(method, ' ');  // cut the method
-            *space = '\0';
-
-            if (strcmp(method, "GET") == 0)  // if it is GET method
-            {
-                // find the first space in string (that's the one before URI)
-                // and initialize a new string starting with it
-                char *route_path = strchr(request, ' ') + 1;
-                space = strchr(route_path, ' ');  // cut the route_path
-                *space = '\0';
-
-                // if the route_path in routes linked list, render it
-                // if not, render 404
-                bool rendered = false;
-
-                for (struct route *p = routes_ll; p != NULL; p = p->next)
-                {
-                    if (strcmp(p->uri, route_path) == 0)
-                    {
-                        strcpy(response, render_template(200, p->html_path));
-                        rendered = true;
-                    }
-                }
-                if (!rendered)
-                    strcpy(response, render_template(404, HTML_IF_404));
-            }
-            else  // if it is not a GET method
-            {
-                strcpy(response, render_template(405, HTML_IF_405));
-            }
-
-            int response_len = strlen(response);
-
-            if (send(client_fd, response, response_len, 0) == -1)  // send data
-                log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'send': %s", strerror(errno));
-
-            close(client_fd);
-            exit(0);
-        }
-        close(client_fd);  // parent doesn't need the accepter anymore
+        ipv4_addr = ((struct sockaddr_in*) &client_addr)->sin_addr;
+        inet_ntop(AF_INET, &ipv4_addr, ip_buf, INET_ADDRSTRLEN);
+        port = ntohs(((struct sockaddr_in*) &client_addr)->sin_port);
     }
+    else if (((struct sockaddr*) &client_addr)->sa_family == AF_INET6)  // if using ipv6
+    {
+        ipv6_addr = ((struct sockaddr_in6*) &client_addr)->sin6_addr;
+        inet_ntop(AF_INET6, &ipv4_addr, ip_buf, INET6_ADDRSTRLEN);
+        port = ntohs(((struct sockaddr_in6*) &client_addr)->sin6_port);
+    }
+
+    *port_buf = port;
 }
 
 // Render a template. Basically concatenating the response template and contents of an HTML file.
@@ -269,7 +190,7 @@ char *render_template(int code, char *rel_path_to_html)
     FILE *pHtml = fopen(path_to_html, "r");
     if (pHtml == NULL)
     {
-        return NULL;
+        return INTERNAL_SERVER_ERROR;
     }
 
     // open response_template
@@ -286,7 +207,7 @@ char *render_template(int code, char *rel_path_to_html)
     if (pResponse_template == NULL)
     {
         fclose(pHtml);
-        return NULL;
+        return INTERNAL_SERVER_ERROR;
     }
 
     // read html
@@ -300,6 +221,110 @@ char *render_template(int code, char *rel_path_to_html)
     fclose(pResponse_template);
 
     return strcat(response_template, html);
+}
+
+// Forks the program and responds to a client.
+void fork_and_respond(int socket_fd, int client_fd, char *ip_str, int port)
+{
+    if (!fork())  // child process
+    {
+        char request[READ_BUF_SIZE];
+        char response[RESPONSE_SIZE];
+        response[0] = '\0';
+
+        close(socket_fd);  // child doesn't need the listener
+
+        if (recv(client_fd, request, READ_BUF_SIZE, 0) == -1)  // reading request
+            log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'recv': %s", strerror(errno));
+
+        // cutting the request at first newline (so now we only have the first line)
+        char *newline = strchr(request, '\n');
+        *newline = '\0';
+        log_print(LOG_INFO, LOG_BOTH, "SERVER: %s:%i; %s", ip_str, port, request);
+
+        char method[8];  // the longest HTTP method is CONNECT (7 symbol + NUL = 8)
+
+        strcpy(method, request);
+        method[7] = '\0';
+        char *space = strchr(method, ' ');  // cut the method
+        *space = '\0';
+
+        if (strcmp(method, "GET") == 0)  // if it is GET method
+        {
+            char uri[URI_SIZE];
+
+            // find the first space in request (that's the one before URI)
+            // and copy everything from it to the end
+            strcpy(uri, strchr(request, ' ') + 1);
+            space = strchr(uri, ' ');  // cut the uri at the next space
+            *space = '\0';
+
+            // if the route_path in routes linked list, render it
+            // if not, render 404
+            bool rendered = false;
+
+            for (struct route *p = routes_ll; p != NULL; p = p->next)
+            {
+                if (strcmp(p->uri, uri) == 0)
+                {
+                    strcpy(response, render_template(200, p->html_path));
+                    rendered = true;
+                }
+            }
+            if (!rendered)
+                strcpy(response, render_template(404, HTML_IF_404));
+        }
+        else  // if it is not a GET method
+        {
+            // if render_template returns NULL, response is length 0 and no errors
+            strcpy(response, render_template(405, HTML_IF_405));
+        }
+
+        // `send` will send some garbage values if set RESPONSE_SIZE as `len`,
+        // so we need this
+        int response_len = strlen(response);
+
+        if (send(client_fd, response, response_len, 0) == -1)  // send data
+            log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'send': %s", strerror(errno));
+
+        close(client_fd);
+        exit(0);
+    }
+}
+
+// Starts an accept loop. Does not return a value.
+void accept_loop(int socket_fd)
+{
+    // initialize variables for incoming connections
+    struct sockaddr_storage client_addr;
+	socklen_t client_addr_len;
+
+    int client_fd, sent_bytes;
+    char exceptions_buf[128];  // for exceptions
+
+    char ip_str[INET6_ADDRSTRLEN];
+    int port;
+
+	while (1)
+    {
+		// accept the incoming connection
+        client_addr_len = sizeof(client_addr);
+        client_fd = accept(socket_fd, (struct sockaddr*) &client_addr, &client_addr_len);
+
+        if (client_fd == -1)
+        {
+            if (errno != 0)  // if some error happened
+            {
+                log_print(LOG_ERROR, LOG_BOTH, "SERVER: In 'accept': %s", strerror(errno));
+            }
+			continue;
+        }
+
+        get_ip_str(client_addr, ip_str, &port);
+
+		fork_and_respond(socket_fd, client_fd, ip_str, port);
+        close(client_fd);  // parent doesn't need the accepter anymore
+    }
 }
 
 // Add new route to linked list.
