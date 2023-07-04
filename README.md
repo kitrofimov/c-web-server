@@ -12,11 +12,11 @@ int main(void)
 }
 ```
 
-Currently this (library, I guess?) **is memory unsafe** and supports only `GET` requests, and I don't think I will add more methods in the closest future, I would rather fix memory errors and restructure the code overall.
+Currently this (library, I guess?) supports only `GET` requests and HTML routing (no form submission, etc.), and I don't think I will add more functionality in the closest future, as this project is not *currently* very fun to me.
 
 # Build
 
-Check `src/config.h` to see (and probably change) some settings.
+Check `src/config.h` to see (and change if you want) some settings.
 
 ```bash
 mkdir build
@@ -52,7 +52,7 @@ Returns error code if some error occurred (and logs it), returns nothing if ever
 int create_socket(char *port, int backlog);
 ```
 
-Creates, binds and listens to a socket. The valid ports are between 1025 and 65535. `backlog` is the number of connections allowed on the incoming queue. 
+Creates, binds and listens to a socket. The valid ports are between 1025 and 65535. `backlog` is the number of connections allowed on the incoming queue. Is a helper function.
 
 Returns a file descriptor if no exeptions, if there are some, returns negative values (and sets `errno`).
 
@@ -69,13 +69,15 @@ void sigchld_handler(int s);
 
 Helper function to kill all unused child processes in `start_server`.
 
-## `accept_loop`
+## `get_ip_str`
 
 ```c
-void accept_loop(int socket_fd);
+void get_ip_str(struct sockaddr_storage client_addr, char *ip_buf, int *port_buf);
 ```
 
-Starts an accept loop. Does not return a value.
+Get IP string from client's connection information. Sets ip_buf to IP, port_buf to PORT. Is a helper function.
+**NOTE**: `ip_buf` should be minimally size `INET6_ADDRSTRLEN`.
+Referenced from: https://stackoverflow.com/questions/3060950/how-to-get-ip-address-from-sock-structure-in-c
 
 ## `render_template`
 
@@ -83,9 +85,25 @@ Starts an accept loop. Does not return a value.
 char *render_template(int code, char *rel_path_to_html);
 ```
 
-Returns a HTTP response with `code` and HTML file. Basically concatenating the response template and contents of an HTML file.
+Returns a HTTP response with `code` and HTML file. Basically concatenating the response template and contents of an HTML file. Is a helper function.
 
-Returns `NULL` if failed to open some file.
+Returns `INTERNAL_SERVER_ERROR` response if failed to open some file.
+
+## `fork_and_respond`
+
+```c
+void fork_and_respond(int socket_fd, int client_fd, char *ip_str, int port);
+```
+
+Forks the program and responds to a client. Is a helper function.
+
+## `accept_loop`
+
+```c
+void accept_loop(int socket_fd);
+```
+
+Starts an accept loop. Does not return a value.
 
 ## `add_route`
 
