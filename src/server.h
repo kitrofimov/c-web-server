@@ -10,7 +10,6 @@ struct route
     struct route *next;
 };
 
-int check_port_validity(char *port);
 int create_socket(char *port, int backlog);
 void accept_loop(int socket_fd);
 char *render_template(int code, char *rel_path_to_html);

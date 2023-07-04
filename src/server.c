@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #include "server.h"
 #include "../lib/logger/logger.h"
@@ -145,6 +146,7 @@ void sigchld_handler(int s)
 
 // Starts an accept loop. Does not return a value.
 // Currently only sends the `response` to the client.
+// A LOT OF memory errors here I guess. Sometime, I will fix them. I hope so.
 void accept_loop(int socket_fd)
 {
     // initialize variables for incoming connections
@@ -208,7 +210,7 @@ void accept_loop(int socket_fd)
             char method[8];
             char route_path[MAX_URI_SIZE];
 
-            strncpy(method, request, 8);
+            strcpy(method, request);
             method[7] = '\0';
             char *space = strchr(method, ' ');  // cut the method
             *space = '\0';
@@ -223,20 +225,22 @@ void accept_loop(int socket_fd)
 
                 // if the route_path in routes linked list, render it
                 // if not, render 404
+                bool rendered = false;
 
                 for (struct route *p = routes_ll; p != NULL; p = p->next)
                 {
                     if (strcmp(p->uri, route_path) == 0)
                     {
-                        strncpy(response, render_template(200, p->html_path), MAX_RESPONSE_SIZE);
-                        break;
+                        strcpy(response, render_template(200, p->html_path));
+                        rendered = true;
                     }
                 }
-                strncpy(response, render_template(404, HTML_IF_404), MAX_RESPONSE_SIZE);
+                if (!rendered)
+                    strcpy(response, render_template(404, HTML_IF_404));
             }
             else  // if it is not a GET method
             {
-                strncpy(response, render_template(405, HTML_IF_405), MAX_RESPONSE_SIZE);
+                strcpy(response, render_template(405, HTML_IF_405));
             }
 
             int response_len = strlen(response);
@@ -285,44 +289,17 @@ char *render_template(int code, char *rel_path_to_html)
         return NULL;
     }
 
-    // calculate html size (`fsize` is not crossplatform)
-    fseek(pHtml, 0, SEEK_END);
-    unsigned long html_size = ftell(pHtml);
-    fseek(pHtml, 0, SEEK_SET);
-
     // read html
-    char *html = malloc(html_size);
-    fread(html, 1, html_size, pHtml);
+    char html[HTML_SIZE];
+    fread(html, 1, HTML_SIZE, pHtml);
     fclose(pHtml);
 
-    // calculate response_template size (`fsize` is not crossplatform)
-    fseek(pResponse_template, 0, SEEK_END);
-    unsigned long response_template_size = ftell(pResponse_template);
-    fseek(pResponse_template, 0, SEEK_SET);
-
     // read response template
-    char *response_template = malloc(html_size + response_template_size);
-    fread(response_template, 1, response_template_size, pResponse_template);
+    char response_template[MAX_RESPONSE_SIZE];
+    fread(response_template, 1, MAX_RESPONSE_SIZE, pResponse_template);
     fclose(pResponse_template);
 
     return strcat(response_template, html);
-}
-
-// Checks the port validity (if it is in the range [1025, 65535]).
-// Returns 1 if it is valid, 0 if it is not
-int check_port_validity(char *port)
-{
-    int port_num = atoi(port);
-
-    // if the port num is not in the range [1025, 65535]
-    if (port_num < 1025 || port_num > 65535)
-    {
-        return 0;
-    }
-    else
-    {
-        return 1;
-    }
 }
 
 // Add new route to linked list.
