@@ -1,5 +1,7 @@
 # c-web-server
-This is a web server in C, which I am creating as a side-project. Here is an example of a simple server with 2 routes (code is from `src/main.c`):
+Made for learning purposes. A simple web server (library?) that supports only `GET` requests and HTML routing (no form submitting, etc.) This is my first ever project in C, there may be *bugs* and *safety issues*. **Do not use this in anything important!**
+
+Here is an example of a simple server with 2 routes (see `src/main.c`):
 
 ```c
 #include "server.h"
@@ -11,8 +13,6 @@ int main(void)
     return start_server("8080", 100);
 }
 ```
-
-Currently this (library, I guess?) supports only `GET` requests and HTML routing (no form submitting, etc.), and I don't think I will add more functionality in the closest future, as this project is not *currently* very fun to me.
 
 # Build
 
